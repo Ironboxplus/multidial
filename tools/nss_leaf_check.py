@@ -21,8 +21,10 @@ def counters(text):
     return result
 
 
-def check_interval(before, after, active, monitored):
-    leaves = {f"{0x100 + n:x}": n for n in monitored}
+def check_interval(before, after, active, monitored, *, leaf_base=0x100):
+    if leaf_base not in (0x100, 0x200):
+        raise ValueError("unsupported leaf tag space")
+    leaves = {f"{leaf_base + n:x}": n for n in monitored}
     if not active or not active <= set(monitored):
         raise ValueError("active slots must be a nonempty subset of monitored slots")
     output = {}
@@ -47,11 +49,13 @@ def main():
     parser.add_argument("after", type=Path)
     parser.add_argument("--active", nargs="+", type=int, required=True)
     parser.add_argument("--monitored", nargs="+", type=int, required=True)
+    parser.add_argument("--direction", choices=("upload", "download"), default="upload")
     args = parser.parse_args()
     try:
         result = check_interval(counters(args.before.read_text()), counters(args.after.read_text()),
-                                set(args.active), args.monitored)
-    except ValueError as exc:
+                                set(args.active), args.monitored,
+                                leaf_base=0x200 if args.direction == "download" else 0x100)
+    except (OSError, ValueError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, indent=2))
 

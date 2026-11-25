@@ -21,6 +21,16 @@ def test_separate_leaf_progress():
     }
 
 
+def test_download_namespace_rejects_upload_counters():
+    before = counters(fixture(1000, 2000))
+    after = counters(fixture(4000, 2000))
+    with pytest.raises(ValueError, match="missing leaf 200"):
+        check_interval(before, after, {0}, [0, 1], leaf_base=0x200)
+    down_before = counters(fixture(1000, 2000).replace("100:", "200:").replace("101:", "201:"))
+    down_after = counters(fixture(4000, 2000).replace("100:", "200:").replace("101:", "201:"))
+    assert check_interval(down_before, down_after, {0}, [0, 1], leaf_base=0x200)[0]["bytes"] == 3000
+
+
 @pytest.mark.parametrize("after,active", [
     (fixture(1000, 2000), {0}),
     (fixture(1000, 4000), {0}),

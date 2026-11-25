@@ -13,6 +13,9 @@ The default class retains its configured reservation. A cap too small for
 the default and one positive rate per line is rejected.
 
 Upload leaf majors are `100..1fe`; download leaf majors are `200..2fe` (hex).
+Use `nss_leaf_check.py --direction download` for the new download tree. Old r3
+trees used the upload range in both directions, so upgrading requires an
+explicitly reviewed tree migration before using a new autorate fragment.
 Ordinary ECM egress QoS tags and the 16-bit IGS tag have distinct semantics.
 An uplink can optionally carry its current positive `ifindex` and nonnegative
 `generation`. Those identify stale observations; they are not firmware fields.
