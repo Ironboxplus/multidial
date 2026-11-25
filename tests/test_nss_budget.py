@@ -22,7 +22,7 @@ def test_shared_cap_bounds_committed_rates_and_keeps_individual_ceilings():
     assert "crate 10000kbit" in result["upload_tc"][4]
     changed = rate_change(profile, 0, 28000, 9000)
     assert "crate 28000kbit" in changed[0]
-    assert "rate 28000kbit" not in changed[0]
+    assert re.search(r"\brate (\d+)kbit", changed[0])[1] != "28000"
 
 
 @pytest.mark.parametrize("value", [0, True, 1001, 1.5, 34359739])

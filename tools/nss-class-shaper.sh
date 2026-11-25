@@ -4,8 +4,8 @@
 # Experimental adapter for per-uplink nsshtb classes; the controller still
 # measures counters and pings on its own logical uplink.
 
-md_nss_set_rate() {
-    local dev=$1 leaf=$2 rate=$3 ceiling=${4:-34359738} committed=${5:-$3} burst cburst
+md_nss_set_rate() (
+    local dev=$1 leaf=$2 rate=$3 ceiling=${4:-34359738} committed=${5:-$3} burst cburst leasefd token
     [[ $dev =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.@-]{0,14}$ ]] || return 1
     [[ $leaf =~ ^[12][0-9a-f]{2}$ && $leaf != 1ff && $leaf != 2ff ]] || return 1
     [[ $rate =~ ^[1-9][0-9]{0,7}$ ]] || return 1
@@ -14,13 +14,22 @@ md_nss_set_rate() {
     [[ $committed =~ ^[1-9][0-9]{0,7}$ ]] || return 1
     ((committed <= 34359738)) || return 1
     ((committed > rate)) && committed=$rate
+    if [[ -n ${md_nss_lease_file-} ]]; then
+        [[ -n ${md_nss_lease_generation-} ]] || return 1
+        # The publisher uses the same stable .lock inode. Keep the shared
+        # lock until tc exits so revocation cannot race a stale writer.
+        exec {leasefd}> "${md_nss_lease_file}.lock" || return 1
+        flock -s -w 2 "$leasefd" || return 1
+        IFS= read -r token < "$md_nss_lease_file" || return 1
+        [[ $token == "$md_nss_lease_generation" ]] || return 1
+    fi
     burst=$(( (committed * 5 + 7) / 8 ))
     ((burst < 2048)) && burst=2048
     cburst=$(( (rate * 5 + 7) / 8 ))
     ((cburst < 2048)) && cburst=2048
     tc class change dev "$dev" parent 1:1 classid "1:$leaf" nsshtb \
         rate "${committed}kbit" burst "$burst" crate "${rate}kbit" cburst "$cburst"
-}
+)
 
 set_shaper_rate() {
     local direction=$1 device ceiling leaf committed

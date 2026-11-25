@@ -38,6 +38,9 @@ def transition(previous, desired):
     # Rates and addresses can change without replacing the physical tree.
     changed = sorted(device for device in old_lines.keys() | new_lines.keys()
                      if structural or old_lines.get(device) != new_lines.get(device))
+    for device in old_lines.keys() & new_lines.keys():
+        if new_lines[device]["generation"] < old_lines[device]["generation"]:
+            raise ValueError("stale lease generation")
     if not changed:
         return []
     steps = [{"operation": "block_learning", "devices": changed},
@@ -128,17 +131,47 @@ def acknowledge(state, token, index, success):
     return state["pending"]
 
 
+def rollback(state):
+    """Replace a failed transaction with an ordered restoration plan.
+
+    Partial application is unknown. Block the union of involved devices and
+    drain before rebuilding the previous tree. Old receipts lose authority.
+    """
+    pending = state["pending"]
+    if not pending:
+        raise ValueError("no pending transition to roll back")
+    profiles = [Profile.parse(value) for value in (state["applied"], pending["desired"]) if value]
+    devices = sorted({line.device for profile in profiles for line in profile.uplinks})
+    steps = [{"operation": "block_learning", "devices": devices},
+             {"operation": "wait_offloads_drained", "devices": devices},
+             {"operation": "remove_owned_tree", "devices": devices}]
+    if state["applied"]:
+        old = Profile.parse(state["applied"])
+        online = [line.device for line in old.uplinks]
+        steps += [{"operation": "prepare_tree", "plan": plan(old)},
+                  {"operation": "verify_both_directions", "devices": online},
+                  {"operation": "allow_learning", "devices": online}]
+    state["revision"] += 1
+    state["pending"] = {"id": identity([state["revision"], "rollback", pending["id"]]),
+                        "desired": state["applied"], "steps": steps, "next": 0,
+                        "receipts": [], "rollback_of": pending["id"]}
+    return state["pending"]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", type=Path, required=True)
     command = parser.add_mutually_exclusive_group(required=True)
     command.add_argument("--profile", type=Path)
     command.add_argument("--stop", action="store_true")
+    command.add_argument("--rollback", action="store_true")
     command.add_argument("--receipt", nargs=3, metavar=("TRANSACTION", "STEP", "ok|failed"))
     args = parser.parse_args()
     try:
         with locked_state(args.state) as state:
-            if args.receipt:
+            if args.rollback:
+                rollback(state)
+            elif args.receipt:
                 token, index, status = args.receipt
                 if status not in ("ok", "failed"):
                     raise ValueError("receipt result must be ok or failed")

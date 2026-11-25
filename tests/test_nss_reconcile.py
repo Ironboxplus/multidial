@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from multidial.nss_reconcile import acknowledge, propose, transition
+from multidial.nss_reconcile import acknowledge, propose, rollback, transition
 from multidial.tests.test_nss import DATA
 
 
@@ -74,6 +74,27 @@ def test_stop_never_reenables_a_removed_line():
     for index in range(3):
         acknowledge(current, pending["id"], index, True)
     assert current["applied"] is None and current["pending"] is None
+
+
+def test_stale_lease_is_rejected_and_rollback_invalidates_old_receipts():
+    current = state()
+    base = copy.deepcopy(DATA)
+    base["uplinks"][0]["generation"] = 2
+    complete(current, base)
+    with pytest.raises(ValueError, match="stale"):
+        propose(current, DATA)
+    changed = copy.deepcopy(base)
+    changed["uplinks"][0]["generation"] = 3
+    failed = propose(current, changed)
+    acknowledge(current, failed["id"], 0, True)
+    restoring = rollback(current)
+    assert restoring["rollback_of"] == failed["id"]
+    assert restoring["steps"][0]["devices"] == ["dial0", "dial1"]
+    with pytest.raises(ValueError, match="stale"):
+        acknowledge(current, failed["id"], 1, True)
+    for index in range(len(restoring["steps"])):
+        acknowledge(current, restoring["id"], index, True)
+    assert propose(current, base) is None
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="POSIX process lock")
