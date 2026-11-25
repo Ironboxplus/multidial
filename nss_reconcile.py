@@ -56,7 +56,8 @@ def transition(previous, desired):
         steps.append({"operation": "update_owned_lines", "before": old_lines,
                       "after": new_lines, "devices": changed,
                       "desired_plan": plan(new)})
-    steps.append({"operation": "verify_both_directions", "devices": changed})
+    steps.append({"operation": "verify_both_directions", "devices": changed,
+                  "checks": ["policy_route_and_nat_source", "upload_leaf", "igs_download_leaf"]})
     online = [device for device in changed if device in new_lines]
     if online:
         steps.append({"operation": "allow_learning", "devices": online})

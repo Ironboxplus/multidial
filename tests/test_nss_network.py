@@ -71,7 +71,8 @@ class Lab:
             self.run("dut", "sysctl", "-qw", f"net.ipv4.conf.{dev}.rp_filter=0")
             self.ip("dut", "route", "add", "table", table, "192.0.2.0/24", "dev", dev)
             self.ip("dut", "route", "add", "table", table, "198.18.0.0/24", "dev", "lan")
-            self.ip("dut", "route", "add", "table", table, "default", "via", "192.0.2.1", "dev", dev)
+            self.ip("dut", "route", "add", "table", table, "default", "via", "192.0.2.1", "dev", dev,
+                    "src", addr)
             self.ip("dut", "rule", "add", "pref", table, "fwmark", f"{(slot+1)*256}/0x3f00", "table", table)
         self.run("dut", "nft", "-f", "-", data='''
 add table ip route_test
@@ -167,6 +168,12 @@ def test_address_renewal_reclassifies_new_flows_and_keeps_other_line(lab):
     exchange(lab, 0)
     lab.ip("dut", "addr", "del", "192.0.2.2/24", "dev", "dial0")
     lab.ip("dut", "addr", "add", "192.0.2.4/24", "dev", "dial0")
+    # DHCP/network managers renew the policy routes together with the lease.
+    # Leaving a removed preferred source in a policy table can fall through to
+    # another dial on the same subnet and masquerade with its address.
+    lab.ip("dut", "route", "replace", "table", "100", "192.0.2.0/24", "dev", "dial0")
+    lab.ip("dut", "route", "replace", "table", "100", "default", "via", "192.0.2.1",
+           "dev", "dial0", "src", "192.0.2.4")
     lab.run("dut", "nft", "-f", "-", data='''
 add rule netdev inspect egress ip saddr 192.0.2.4 meta mark 0x100 meta priority 0x01000000 counter name line0
 ''')
