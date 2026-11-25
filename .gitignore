@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+web/node_modules/
+web/.vite/
+
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+.handfree-output/
+
+# UI research: third-party screenshots and raw router snapshots (real student ids) stay local
+ui-research/refs/
+ui-research/proto/raw/
+ui-research/proto/node_modules/
+ui-research/proto/dist/
+WORKLIST.md
+PLAN-*.md
+.playwright-mcp/
+bash.exe.stackdump
+ui-research/journal-pending.md

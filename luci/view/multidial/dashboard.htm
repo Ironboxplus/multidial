@@ -1,0 +1,18 @@
+<%+header%>
+<%
+-- API base for the SPA = this controller's own URL, so fetches stay same-origin
+-- and inherit the LuCI session. The React app reads window.__MULTIDIAL_API__.
+local api_base = luci.dispatcher.build_url("admin/services/multidial")
+%>
+<script type="text/javascript">
+	window.__MULTIDIAL_API__ = '<%=api_base%>';
+</script>
+<link rel="stylesheet" href="/luci-static/multidial/multidial.css?v=9">
+<div id="multidial-root">
+	<div style="padding:2em;font:14px monospace;color:#888">加载多拨监控面板…</div>
+</div>
+<!-- type=module: the Vite bundle is an ES module; loading it as a classic
+     script leaks its top-level vars (e.g. `_`) into LuCI's global scope and
+     collides with LuCI's gettext `_()`, aborting the script. -->
+<script type="module" src="/luci-static/multidial/multidial.js?v=9"></script>
+<%+footer%>

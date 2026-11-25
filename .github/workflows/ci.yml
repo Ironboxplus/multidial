@@ -1,0 +1,126 @@
+# Unit tests, the dashboard bundle and the noarch
+# .apk for an apk-based router (AX9000, ImmortalWrt main). Artifacts are kept
+# for 2 days; download anything worth keeping.
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Same pinned SDK as Ironboxplus/cake-autorate-openwrt's build.yml. The
+  # package is PKGARCH:=all, so any target's SDK produces the same .apk.
+  SDK_ARCHIVE: "openwrt-sdk-25.12.5-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+  SDK_URL_DIR: "https://downloads.openwrt.org/releases/25.12.5/targets/x86/64"
+  SDK_MIRROR_DIR: "https://mirror-03.infra.openwrt.org/releases/25.12.5/targets/x86/64"
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # The tests import `multidial.*`, so the checkout must be a directory
+      # named multidial on sys.path.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: multidial
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest
+      - run: python -m pytest multidial/tests -q
+
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - working-directory: web
+        run: |
+          npm ci
+          npm run build
+          ls -l dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 2
+          if-no-files-found: error
+
+  package:
+    needs: [test, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: src
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: src/web/dist
+      - name: Install SDK host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential gawk gettext \
+            git libncurses-dev libssl-dev python3 rsync unzip zlib1g-dev file wget zstd aria2
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: owrt-sdk-${{ env.SDK_ARCHIVE }}
+          path: ~/sdk-cache
+      - name: Download + extract the SDK (checksum verified)
+        run: |
+          mkdir -p ~/sdk-cache && cd ~/sdk-cache
+          wget -q --tries=3 --timeout=30 -O sha256sums "$SDK_URL_DIR/sha256sums"
+          grep " \*$SDK_ARCHIVE\$" sha256sums > sdk.sha256
+          if ! { [ -f "$SDK_ARCHIVE" ] && sha256sum -c --status sdk.sha256; }; then
+            rm -f "$SDK_ARCHIVE" "$SDK_ARCHIVE.part"
+            aria2c --console-log-level=warn -x 16 -s 16 -k 4M --max-tries=5 --retry-wait=5 \
+              --timeout=30 -o "$SDK_ARCHIVE.part" \
+              "$SDK_URL_DIR/$SDK_ARCHIVE" "$SDK_MIRROR_DIR/$SDK_ARCHIVE" \
+              || wget -q --tries=3 --timeout=30 -O "$SDK_ARCHIVE.part" "$SDK_URL_DIR/$SDK_ARCHIVE"
+            mv "$SDK_ARCHIVE.part" "$SDK_ARCHIVE"
+            sha256sum -c sdk.sha256
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/sdk"
+          tar --use-compress-program=unzstd -xf "$SDK_ARCHIVE" -C "$GITHUB_WORKSPACE/sdk" --strip-components=1
+      - name: Build the multidial .apk
+        working-directory: sdk
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/feed"
+          cp -a "$GITHUB_WORKSPACE/src" "$GITHUB_WORKSPACE/feed/multidial"
+          rm -rf "$GITHUB_WORKSPACE/feed/multidial/.git" "$GITHUB_WORKSPACE/feed/multidial/web/node_modules"
+          cp feeds.conf.default feeds.conf
+          echo "src-link multidial $GITHUB_WORKSPACE/feed" >> feeds.conf
+          ./scripts/feeds update base multidial
+          ./scripts/feeds install multidial
+          echo "CONFIG_PACKAGE_multidial=m" > .config
+          make defconfig
+          # Only this package; its runtime deps are resolved by apk on the router.
+          make package/multidial/compile NO_DEPS=1 V=s
+      - name: Assert the package contents and dependencies
+        working-directory: sdk
+        run: |
+          apk=./staging_dir/host/bin/apk
+          pkg=$(find bin/packages -name 'multidial-*.apk')
+          test -n "$pkg"
+          dump=$("$apk" adbdump "$pkg")
+          for dep in python3-light mwan3 sqm-scripts kmod-sched-cake cake-autorate kmod-macvlan; do
+            echo "$dump" | grep -qx "    - $dep" || { echo "::error::lost dependency $dep"; exit 1; }
+          done
+          for f in sqm.py sticky.py daemon.py 17-multidial-sticky multidial.js multidial.css; do
+            echo "$dump" | grep -q "$f" || { echo "::error::$f missing from the package"; exit 1; }
+          done
+          mkdir -p "$GITHUB_WORKSPACE/apks" && cp "$pkg" "$GITHUB_WORKSPACE/apks/"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multidial-apk
+          path: apks/*.apk
+          retention-days: 2
+          if-no-files-found: error

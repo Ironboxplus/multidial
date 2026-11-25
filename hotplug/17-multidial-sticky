@@ -1,0 +1,61 @@
+#!/bin/sh
+# Keep mwan3 sticky working while dials come and go.
+#
+# mwan3 (2.11.16 .. 2.12.5) builds the per-interface "restore the remembered
+# mark" rules of a sticky rule only in mwan3_set_sticky_iptables(), called from
+# mwan3_set_user_rules(), i.e. at mwan3 start. An interface that is not yet in
+# the policy then (multidial restarts mwan3 before the dials are online) never
+# gets a restore rule, and 15-mwan3 does not rebuild user rules on
+# connected/disconnected (and exits on FIRSTCONNECT). So sticky silently does
+# nothing. Rebuild the user rules after every membership change, and drop the
+# ipset entries of a dead interface so nobody stays pinned to it.
+#
+# Runs after 15-mwan3 (so the policy chains already reflect the event) and
+# before 16-mwan3-user.
+
+SCRIPTNAME="multidial-sticky"
+
+[ "$ACTION" = "ifup" ] || [ "$ACTION" = "ifdown" ] || \
+	[ "$ACTION" = "connected" ] || [ "$ACTION" = "disconnected" ] || exit 0
+[ -n "$INTERFACE" ] || exit 0
+[ "$MWAN3_SHUTDOWN" = "1" ] || [ "$MWAN3_STARTUP" = "init" ] && exit 0
+
+. /lib/functions.sh
+. /lib/functions/network.sh
+. /lib/mwan3/mwan3.sh
+
+initscript=/etc/init.d/mwan3
+. /lib/functions/procd.sh
+
+/etc/init.d/mwan3 running || exit 0
+
+mwan3_init
+$IPT4 -S mwan3_hook >/dev/null 2>&1 || exit 0
+
+config_load mwan3
+config_get_bool enabled "$INTERFACE" enabled 0
+[ "$enabled" -eq 1 ] || exit 0
+
+# same lock as 15-mwan3, so we never interleave with its policy rebuild
+procd_lock
+
+has_sticky=0
+check_sticky()
+{
+	local sticky
+	config_get_bool sticky "$1" sticky 0
+	[ "$sticky" -eq 1 ] && has_sticky=1
+}
+config_foreach check_sticky rule
+[ "$has_sticky" -eq 1 ] || exit 0
+
+case "$ACTION" in
+	disconnected|ifdown)
+		mwan3_delete_iface_ipset_entries "$INTERFACE"
+		;;
+esac
+
+LOG notice "rebuilding sticky rules after $ACTION on $INTERFACE"
+mwan3_set_user_rules
+
+exit 0

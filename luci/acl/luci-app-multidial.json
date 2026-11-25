@@ -1,0 +1,11 @@
+{
+	"luci-app-multidial": {
+		"description": "Grant access to the multi-dial management dashboard",
+		"read": {
+			"uci": [ "multidial" ]
+		},
+		"write": {
+			"uci": [ "multidial" ]
+		}
+	}
+}

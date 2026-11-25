@@ -1,0 +1,10 @@
+Name: mwan3_rule_ipv4_md_svc
+Type: hash:ip,mark
+Revision: 3
+Header: family inet markmask 0x00003f00 hashsize 1024 maxelem 65536 timeout 600 bucketsize 12 initval 0x703222c7
+Size in memory: 7560
+References: 2
+Number of entries: 2
+Members:
+192.0.2.178,0x00000100 timeout 251
+192.0.2.139,0x00000400 timeout 257

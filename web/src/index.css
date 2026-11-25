@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.65rem;
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --primary: 142.1 70.6% 45.3%;
+    --primary-foreground: 144.9 80.4% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 142.1 70.6% 45.3%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 8% 6%;
+    --card-foreground: 0 0% 98%;
+    --primary: 142.1 70.6% 45.3%;
+    --primary-foreground: 144.9 80.4% 10%;
+    --muted: 240 3.7% 14%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 142.1 70.6% 45.3%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  /* LuCI argon styles bare controls page-wide (2.5rem tall, padded, grey,
+     rounded; dark.css adds an !important 1px border). Undo that inside the SPA:
+     (0,0,1) like argon's rules but loaded after them, and below every Tailwind
+     utility. Only the border needs !important, so a control that wants one says
+     `!border` (and `!border-<colour>`). Headings and the page header are divs:
+     argon boxes every h2 and hangs a bar off every <header>. */
+  :where(#multidial-root) :is(button, input, select) {
+    height: auto;
+    margin: 0;
+    padding: 0;
+    line-height: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    box-shadow: none;
+    transition: none;
+    border: 0 solid hsl(var(--border)) !important;
+  }
+}

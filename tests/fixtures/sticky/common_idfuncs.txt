@@ -1,0 +1,13 @@
+162:mwan3_id2mask()
+163-{
+164-	local bit_msk bit_val result
+165-	bit_val=0
+166-	result=0
+167-	for bit_msk in $(seq 0 31); do
+168-		if [ $((($2>>bit_msk)&1)) = "1" ]; then
+169-			if [ $((($1>>bit_val)&1)) = "1" ]; then
+170-				result=$((result|(1<<bit_msk)))
+171-			fi
+172-			bit_val=$((bit_val+1))
+173-		fi
+174-	done

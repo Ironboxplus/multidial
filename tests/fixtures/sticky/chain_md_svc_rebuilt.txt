@@ -1,0 +1,14 @@
+-N mwan3_rule_md_svc
+-A mwan3_rule_md_svc -m mark --mark 0x0/0x3f00 -j MARK --set-xmark 0x500/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x500/0x3f00 -m set ! --match-set mwan3_rule_ipv4_md_svc src,src -j MARK --set-xmark 0x0/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x0/0x3f00 -j MARK --set-xmark 0x400/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x400/0x3f00 -m set ! --match-set mwan3_rule_ipv4_md_svc src,src -j MARK --set-xmark 0x0/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x0/0x3f00 -j MARK --set-xmark 0x300/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x300/0x3f00 -m set ! --match-set mwan3_rule_ipv4_md_svc src,src -j MARK --set-xmark 0x0/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x0/0x3f00 -j MARK --set-xmark 0x200/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x200/0x3f00 -m set ! --match-set mwan3_rule_ipv4_md_svc src,src -j MARK --set-xmark 0x0/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x0/0x3f00 -j MARK --set-xmark 0x100/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x100/0x3f00 -m set ! --match-set mwan3_rule_ipv4_md_svc src,src -j MARK --set-xmark 0x0/0x3f00
+-A mwan3_rule_md_svc -m mark --mark 0x0/0x3f00 -j mwan3_policy_md_balanced
+-A mwan3_rule_md_svc -m mark ! --mark 0xfc00/0xfc00 -j SET --del-set mwan3_rule_ipv4_md_svc src,src
+-A mwan3_rule_md_svc -m mark ! --mark 0xfc00/0xfc00 -j SET --add-set mwan3_rule_ipv4_md_svc src,src
