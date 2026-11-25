@@ -138,3 +138,17 @@ def test_real_cli_restart_and_concurrent_proposals_share_one_transaction(tmp_pat
                                capture_output=True, text=True, timeout=10)
     assert duplicate.returncode != 0
     assert json.loads(stored.read_text())["pending"]["next"] == 1
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="POSIX process lock")
+def test_corrupt_state_is_preserved_and_never_silently_reset(tmp_path):
+    stored = tmp_path / "state.json"
+    stored.write_text('{"version":1,"pending":')
+    original = stored.read_bytes()
+    result = subprocess.run([sys.executable, "-m", "multidial.nss_reconcile",
+                             "--state", str(stored), "--stop"],
+                            cwd=Path(__file__).resolve().parents[2], capture_output=True,
+                            text=True, timeout=5)
+    assert result.returncode != 0
+    assert stored.read_bytes() == original
+    assert result.stdout == ""
