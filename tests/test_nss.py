@@ -29,7 +29,7 @@ def test_complete_two_direction_plan():
     for slot, address in [(0, "192.0.2.2"), (1, "192.0.2.3")]:
         leaf = f"{0x100 + slot:x}"
         assert any(f"parent 1:{leaf} handle {leaf}:" in cmd for cmd in result["upload_tc"])
-        assert any(f"dst {address}/32 flowid {leaf}:" in cmd for cmd in result["download_tc"])
+        assert any(f"dst {address}/32 flowid {0x200 + slot:x}:" in cmd for cmd in result["download_tc"])
     assert not any("filter" in cmd for cmd in result["upload_tc"])
 
 
@@ -56,7 +56,8 @@ def test_autorate_measures_each_line_and_updates_only_its_own_leaf():
 def test_rate_change_touches_only_selected_classes():
     commands = rate_change(Profile.parse(DATA), 1, 40000, 12000)
     assert len(commands) == 2
-    assert all("class change" in cmd and "1:101 " in cmd for cmd in commands)
+    assert all("class change" in cmd for cmd in commands)
+    assert "1:201 " in commands[0] and "1:101 " in commands[1]
     assert "rate 40000kbit" in commands[0] and "dev ifb-test" in commands[0]
     assert "rate 12000kbit" in commands[1] and "dev eth-test" in commands[1]
     with pytest.raises(ValueError):

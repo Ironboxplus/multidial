@@ -18,6 +18,27 @@ env:
   SDK_MIRROR_DIR: "https://mirror-03.infra.openwrt.org/releases/25.12.5/targets/x86/64"
 
 jobs:
+  network:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: multidial
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends iproute2 nftables
+          pip install pytest
+      - run: sudo env MULTIDIAL_NETWORK_TESTS=1 "$(which python)" -m pytest multidial/tests/test_nss_network.py -v -s --junitxml=network-results.xml
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: network-results
+          path: network-results.xml
+          if-no-files-found: error
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -54,7 +75,7 @@ jobs:
           if-no-files-found: error
 
   package:
-    needs: [test, web]
+    needs: [test, web, network]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

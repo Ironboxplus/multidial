@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 
 # Shared with the original standalone planner.
-from .tools.nss_ingress_plan import ingress_plan, rate_params
+from .tools.nss_ingress_plan import guarantees, ingress_plan, rate_params
 
 
 def interface_name(value):
@@ -34,6 +34,10 @@ class Uplink:
     def leaf(self):
         return f"{0x100 + self.slot:x}"
 
+    @property
+    def download_leaf(self):
+        return f"{0x200 + self.slot:x}"
+
 
 @dataclass(frozen=True)
 class Profile:
@@ -42,6 +46,9 @@ class Profile:
     default_download_kbit: int
     default_upload_kbit: int
     uplinks: tuple[Uplink, ...]
+    physical_download_kbit: int | None = None
+    physical_upload_kbit: int | None = None
+    offload: str = "software"
 
     @classmethod
     def parse(cls, data):
@@ -77,8 +84,25 @@ class Profile:
             slots.add(slot)
         if not uplinks:
             raise ValueError("at least one uplink required")
-        return cls(physical, ifb, download, upload,
-                   tuple(sorted(uplinks, key=lambda line: line.slot)))
+        dl_cap = data.get("physical_download_kbit")
+        ul_cap = data.get("physical_upload_kbit")
+        for cap in (dl_cap, ul_cap):
+            if cap is not None:
+                positive_rate(cap)
+        mode = data.get("offload", "software")
+        if mode not in ("software", "ecm"):
+            raise ValueError("offload must be software or ecm")
+        profile = cls(physical, ifb, download, upload,
+                      tuple(sorted(uplinks, key=lambda line: line.slot)), dl_cap, ul_cap, mode)
+        for direction in ("download", "upload"):
+            committed_rates(profile, direction)
+        return profile
+
+
+def committed_rates(profile, direction):
+    return guarantees({line.slot: getattr(line, f"{direction}_kbit") for line in profile.uplinks},
+                      getattr(profile, f"default_{direction}_kbit"),
+                      getattr(profile, f"physical_{direction}_kbit"))
 
 
 def upload_rules(profile):
@@ -98,7 +122,7 @@ def upload_rules(profile):
 
 def upload_tree(profile):
     dev = profile.physical
-    aggregate = profile.default_upload_kbit + sum(line.upload_kbit for line in profile.uplinks)
+    committed, aggregate = committed_rates(profile, "upload")
     opts = "nssfq_codel target 5ms interval 100ms flows 128 limit 256 accel_mode 0"
     result = [
         f"qdisc add dev {dev} root handle 1: nsshtb accel_mode 0",
@@ -108,7 +132,7 @@ def upload_tree(profile):
     ]
     for line in profile.uplinks:
         result += [
-            f"class add dev {dev} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(line.upload_kbit)}",
+            f"class add dev {dev} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(committed[line.slot], line.upload_kbit)}",
             f"qdisc add dev {dev} parent 1:{line.leaf} handle {line.leaf}: {opts}",
         ]
     return result
@@ -125,8 +149,8 @@ def rate_change(profile, slot, download_kbit, upload_kbit):
     if download_kbit > line.download_kbit or upload_kbit > line.upload_kbit:
         raise ValueError("rate update exceeds the configured class ceiling")
     return [
-        f"class change dev {profile.ifb} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(download_kbit)}",
-        f"class change dev {profile.physical} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(upload_kbit)}",
+        f"class change dev {profile.ifb} parent 1:1 classid 1:{line.download_leaf} nsshtb {rate_params(min(download_kbit, committed_rates(profile, 'download')[0][slot]), download_kbit)}",
+        f"class change dev {profile.physical} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(min(upload_kbit, committed_rates(profile, 'upload')[0][slot]), upload_kbit)}",
     ]
 
 
@@ -142,8 +166,12 @@ def autorate_fragment(profile, line):
         f"md_nss_dl_device='{profile.ifb}'",
         f"md_nss_ul_device='{profile.physical}'",
         f"md_nss_leaf='{line.leaf}'",
+        f"md_nss_dl_leaf='{line.download_leaf}'",
+        f"md_nss_ul_leaf='{line.leaf}'",
         f"md_nss_dl_ceiling_kbit='{line.download_kbit}'",
         f"md_nss_ul_ceiling_kbit='{line.upload_kbit}'",
+        f"md_nss_dl_committed_kbit='{committed_rates(profile, 'download')[0][line.slot]}'",
+        f"md_nss_ul_committed_kbit='{committed_rates(profile, 'upload')[0][line.slot]}'",
         ". /usr/lib/multidial/multidial/tools/nss-class-shaper.sh",
         "",
     ])
@@ -155,11 +183,15 @@ def plan(profile):
         "mode": "experimental-plan-hardware-validation-failed",
         "requirements": [
             "dedicated NSS physical uplink, outside every bridge and management path",
-            "every listed uplink is a VEPA macvlan linked to this physical interface",
+            f"every listed uplink is a {'private' if profile.offload == 'ecm' else 'vepa'} macvlan linked to this physical interface",
             "listed IPv4 addresses match the uplinks' live DHCP addresses",
             "no existing SQM, ingress filters or NSS mapping on the experiment interfaces",
             "independent recovery and cleanup of experiment-owned objects",
         ],
+        "offload": profile.offload,
+        "ecm_requirements": (["mwan3_enable=1", "igs_enabled=1", "accel_delay_pkts=1",
+                              "interface_denied_list available", "IGS tag readiness validated"]
+                             if profile.offload == "ecm" else []),
         "setup": [
             ["ip", "link", "add", "name", profile.ifb, "type", "ifb"],
             ["ip", "link", "set", "dev", profile.ifb, "up"],
@@ -172,7 +204,8 @@ def plan(profile):
         "upload_tc": upload_tree(profile),
         "download_tc": ingress_plan(profile.ifb,
                                    [(line.slot, line.address, line.download_kbit) for line in profile.uplinks],
-                                   profile.default_download_kbit),
+                                   profile.default_download_kbit,
+                                   total_kbit=profile.physical_download_kbit, leaf_base=0x200),
         # Install nft batch only after both trees exist.
         "upload_nft": upload_rules(profile),
         "autorate_fragments": {
