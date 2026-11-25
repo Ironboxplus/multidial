@@ -114,7 +114,7 @@ jobs:
           for dep in python3-light mwan3 sqm-scripts kmod-sched-cake cake-autorate kmod-macvlan; do
             echo "$dump" | grep -qx "    - $dep" || { echo "::error::lost dependency $dep"; exit 1; }
           done
-          for f in sqm.py sticky.py daemon.py 17-multidial-sticky multidial.js multidial.css; do
+          for f in sqm.py nss.py nss_ingress_plan.py nss_leaf_check.py nss-class-shaper.sh sticky.py daemon.py 17-multidial-sticky multidial.js multidial.css; do
             echo "$dump" | grep -q "$f" || { echo "::error::$f missing from the package"; exit 1; }
           done
           mkdir -p "$GITHUB_WORKSPACE/apks" && cp "$pkg" "$GITHUB_WORKSPACE/apks/"
