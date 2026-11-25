@@ -26,9 +26,12 @@ class Lab:
         self.processes = []
 
     def run(self, role, *args, data=None, check=True):
-        return subprocess.run(["ip", "netns", "exec", self.names[role], *args],
-                              input=data, text=True, capture_output=True,
-                              check=check, timeout=10)
+        result = subprocess.run(["ip", "netns", "exec", self.names[role], *args],
+                                input=data, text=True, capture_output=True,
+                                timeout=10)
+        if check and result.returncode:
+            pytest.fail(f"{role} {args}: {result.stderr}\ninput: {data}")
+        return result
 
     def ip(self, role, *args):
         return self.run(role, "ip", *args)
