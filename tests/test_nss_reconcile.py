@@ -75,6 +75,17 @@ def test_stop_never_reenables_a_removed_line():
     assert current["applied"] is None and current["pending"] is None
 
 
+def test_shared_budget_reallocation_includes_sibling_classes():
+    current = state()
+    base = copy.deepcopy(DATA)
+    base["physical_download_kbit"] = 40000
+    complete(current, base)
+    updated = copy.deepcopy(base)
+    updated["uplinks"][0]["download_kbit"] = 10000
+    pending = propose(current, updated)
+    assert pending["steps"][0]["devices"] == ["dial0", "dial1"]
+
+
 def test_stale_lease_is_rejected_and_rollback_invalidates_old_receipts():
     current = state()
     base = copy.deepcopy(DATA)

@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from .nss import Profile, plan
+from .nss import Profile, committed_rates, plan
 
 
 def identity(value):
@@ -38,6 +38,17 @@ def transition(previous, desired):
     # Rates and addresses can change without replacing the physical tree.
     changed = sorted(device for device in old_lines.keys() | new_lines.keys()
                      if structural or old_lines.get(device) != new_lines.get(device))
+    if old and new:
+        # Changing one ceiling may redistribute guarantees to siblings under
+        # a shared physical cap. They must be reconciled in the same update.
+        affected = set(changed)
+        for direction in ("download", "upload"):
+            before = committed_rates(old, direction)[0]
+            after = committed_rates(new, direction)[0]
+            for line in new.uplinks:
+                if line.device in old_lines and before.get(line.slot) != after[line.slot]:
+                    affected.add(line.device)
+        changed = sorted(affected)
     for device in old_lines.keys() & new_lines.keys():
         if new_lines[device]["generation"] < old_lines[device]["generation"]:
             raise ValueError("stale lease generation")
