@@ -29,6 +29,8 @@ class Uplink:
     address: str
     download_kbit: int
     upload_kbit: int
+    ifindex: int | None = None
+    generation: int = 0
 
     @property
     def leaf(self):
@@ -76,9 +78,15 @@ class Profile:
                 raise ValueError("uplink needs an assigned unicast IPv4")
             if device in devices or address in addresses:
                 raise ValueError("uplink devices and addresses must be unique")
+            ifindex = item.get("ifindex")
+            generation = item.get("generation", 0)
+            if ifindex is not None and (type(ifindex) is not int or ifindex < 1):
+                raise ValueError("ifindex must be a positive integer")
+            if type(generation) is not int or generation < 0:
+                raise ValueError("generation must be a nonnegative integer")
             uplinks.append(Uplink(slot, device, str(address),
                                   positive_rate(item["download_kbit"]),
-                                  positive_rate(item["upload_kbit"])))
+                                  positive_rate(item["upload_kbit"]), ifindex, generation))
             devices.add(device)
             addresses.add(address)
             slots.add(slot)

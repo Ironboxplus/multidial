@@ -79,9 +79,9 @@ add chain ip route_test prerouting { type filter hook prerouting priority mangle
 add rule ip route_test prerouting ct state established,related meta mark set ct mark
 add rule ip route_test prerouting ip saddr 198.18.0.2 meta mark set 0x100 ct mark set meta mark
 add rule ip route_test prerouting ip saddr 198.18.0.3 meta mark set 0x200 ct mark set meta mark
-add chain ip route_test snat { type nat hook postrouting priority srcnat; policy accept; }
-add rule ip route_test snat oifname "dial0" masquerade
-add rule ip route_test snat oifname "dial1" masquerade
+add chain ip route_test nat_out { type nat hook postrouting priority srcnat; policy accept; }
+add rule ip route_test nat_out oifname "dial0" masquerade
+add rule ip route_test nat_out oifname "dial1" masquerade
 ''')
         profile = Profile.parse({"physical": "phy", "ifb": "ifb-test",
             "default_download_kbit": 1000, "default_upload_kbit": 1000,

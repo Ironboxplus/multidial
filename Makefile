@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=multidial
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_LICENSE:=Proprietary
 
 include $(INCLUDE_DIR)/package.mk
@@ -36,7 +36,7 @@ endef
 define Package/multidial/install
 	$(INSTALL_DIR) $(1)/usr/lib/multidial/multidial
 	$(CP) ./__init__.py ./__main__.py ./api.py ./config.py ./daemon.py ./dialer.py \
-		./dns.py ./sqm.py ./nss.py ./state.py ./sticky.py ./uci_sync.py $(1)/usr/lib/multidial/multidial/
+		./dns.py ./sqm.py ./nss.py ./nss_reconcile.py ./state.py ./sticky.py ./uci_sync.py $(1)/usr/lib/multidial/multidial/
 	$(INSTALL_DIR) $(1)/usr/lib/multidial/multidial/tools
 	$(INSTALL_DATA) ./tools/nss_ingress_plan.py ./tools/nss_leaf_check.py $(1)/usr/lib/multidial/multidial/tools/
 	$(INSTALL_DATA) ./tools/nss-class-shaper.sh $(1)/usr/lib/multidial/multidial/tools/
