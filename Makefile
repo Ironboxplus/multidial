@@ -13,7 +13,7 @@ define Package/multidial
   SUBMENU:=Routing and Redirection
   TITLE:=Campus multi-dial manager (macvlan + mwan3 + per-dial CAKE autorate)
   PKGARCH:=all
-  DEPENDS:=+python3-light +python3-logging +python3-urllib +ip-full +curl \
+  DEPENDS:=+python3-light +python3-logging +python3-urllib +ip-full +curl +flock \
 	+kmod-macvlan +mwan3 +sqm-scripts +kmod-sched-cake +cake-autorate \
 	+luci-compat +luci-lua-runtime
 endef

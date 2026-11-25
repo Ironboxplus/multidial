@@ -1,7 +1,8 @@
 """Explicit NSS multi-uplink experiment planner.
 
 python -m multidial.nss PROFILE.json prints a JSON execution plan.
-It never applies rules. Uplinks remain VEPA macvlans for software routing.
+It never applies rules. Software-routing plans use VEPA macvlans; explicit
+ECM candidates declare private macvlan and additional qualification requirements.
 """
 from __future__ import annotations
 

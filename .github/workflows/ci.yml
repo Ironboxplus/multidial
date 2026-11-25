@@ -132,7 +132,7 @@ jobs:
           pkg=$(find bin/packages -name 'multidial-*.apk')
           test -n "$pkg"
           dump=$("$apk" adbdump "$pkg")
-          for dep in python3-light mwan3 sqm-scripts kmod-sched-cake cake-autorate kmod-macvlan; do
+          for dep in python3-light mwan3 sqm-scripts kmod-sched-cake cake-autorate kmod-macvlan flock; do
             echo "$dump" | grep -qx "    - $dep" || { echo "::error::lost dependency $dep"; exit 1; }
           done
           for f in sqm.py nss.py nss_reconcile.py nss_ingress_plan.py nss_leaf_check.py nss-class-shaper.sh sticky.py daemon.py 17-multidial-sticky multidial.js multidial.css; do
