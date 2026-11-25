@@ -10,9 +10,12 @@ in this repository are synthetic and must be replaced for a real deployment.
 Credentials belong in local UCI configuration.
 
 The CI workflow tests Python, builds the dashboard and packages a noarch APK.
-The NSS ingress planner under tools prints experimental tc batches for a
-dedicated test interface. Hardware throughput, multi-WAN failover and ECM
-coexistence validation remain pending.
+The NSS planner prints experimental tc batches for a dedicated test interface.
+Hardware testing exposed a single-root-class requirement and subsequently lost
+management connectivity during a virtual-bridge traffic experiment. The root
+layout is corrected in the planner, but the connectivity failure is unresolved.
+The NSS experiment is unsuitable for production deployment. The default CAKE
+service does not execute these plans.
 
 This publication starts a new history. Device screenshots and research captures
 are excluded, and test fixtures use anonymized addresses and identifiers.

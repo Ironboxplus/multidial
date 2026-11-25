@@ -98,15 +98,17 @@ def upload_rules(profile):
 
 def upload_tree(profile):
     dev = profile.physical
+    aggregate = profile.default_upload_kbit + sum(line.upload_kbit for line in profile.uplinks)
     opts = "nssfq_codel target 5ms interval 100ms flows 128 limit 256 accel_mode 0"
     result = [
         f"qdisc add dev {dev} root handle 1: nsshtb accel_mode 0",
-        f"class add dev {dev} parent 1: classid 1:2 nsshtb {rate_params(profile.default_upload_kbit)}",
+        f"class add dev {dev} parent 1: classid 1:1 nsshtb {rate_params(aggregate)}",
+        f"class add dev {dev} parent 1:1 classid 1:2 nsshtb {rate_params(profile.default_upload_kbit)}",
         f"qdisc add dev {dev} parent 1:2 handle 2: {opts} set_default",
     ]
     for line in profile.uplinks:
         result += [
-            f"class add dev {dev} parent 1: classid 1:{line.leaf} nsshtb {rate_params(line.upload_kbit)}",
+            f"class add dev {dev} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(line.upload_kbit)}",
             f"qdisc add dev {dev} parent 1:{line.leaf} handle {line.leaf}: {opts}",
         ]
     return result
@@ -120,9 +122,11 @@ def rate_change(profile, slot, download_kbit, upload_kbit):
         if type(value) is not int:
             raise ValueError("rates must be integer kbit/s")
         rate_params(value)
+    if download_kbit > line.download_kbit or upload_kbit > line.upload_kbit:
+        raise ValueError("rate update exceeds the configured class ceiling")
     return [
-        f"class change dev {profile.ifb} parent 1: classid 1:{line.leaf} nsshtb {rate_params(download_kbit)}",
-        f"class change dev {profile.physical} parent 1: classid 1:{line.leaf} nsshtb {rate_params(upload_kbit)}",
+        f"class change dev {profile.ifb} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(download_kbit)}",
+        f"class change dev {profile.physical} parent 1:1 classid 1:{line.leaf} nsshtb {rate_params(upload_kbit)}",
     ]
 
 
@@ -146,7 +150,7 @@ def autorate_fragment(profile, line):
 def plan(profile):
     # Mapping must exist before root NSS qdisc init recognizes an IGS IFB.
     return {
-        "mode": "experimental-plan",
+        "mode": "experimental-plan-hardware-validation-failed",
         "requirements": [
             "dedicated NSS physical uplink, outside every bridge and management path",
             "every listed uplink is a VEPA macvlan linked to this physical interface",

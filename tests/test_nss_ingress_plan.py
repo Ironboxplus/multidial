@@ -20,7 +20,7 @@ def test_separate_leaf_tags_and_default():
 
 def test_rate_update_only_names_existing_class():
     assert ingress_plan("ifb0", LINES, 1000, 10) == [
-        "class change dev ifb0 parent 1: classid 1:10a nsshtb rate 50000kbit burst 31250 crate 50000kbit cburst 31250"
+        "class change dev ifb0 parent 1:1 classid 1:10a nsshtb rate 50000kbit burst 31250 crate 50000kbit cburst 31250"
     ]
     with pytest.raises(ValueError):
         ingress_plan("ifb0", LINES, 1000, 3)

@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=multidial
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=Proprietary
 
 include $(INCLUDE_DIR)/package.mk

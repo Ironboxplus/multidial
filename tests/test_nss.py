@@ -17,6 +17,13 @@ DATA = {
 
 def test_complete_two_direction_plan():
     result = plan(Profile.parse(DATA))
+    for section, device, rate in [("upload_tc", "eth-test", 26000),
+                                   ("download_tc", "ifb-test", 76000)]:
+        classes = [cmd for cmd in result[section] if cmd.startswith("class add")]
+        roots = [cmd for cmd in classes if "parent 1: classid" in cmd]
+        assert len(roots) == 1 and "classid 1:1 " in roots[0]
+        assert f"rate {rate}kbit" in roots[0]
+        assert all("parent 1:1 " in cmd for cmd in classes if cmd not in roots)
     assert result["setup"][0] == ["ip", "link", "add", "name", "ifb-test", "type", "ifb"]
     assert "nssmirred redirect dev ifb-test fromdev eth-test" in result["bind_tc"][1]
     for slot, address in [(0, "192.0.2.2"), (1, "192.0.2.3")]:
@@ -54,6 +61,8 @@ def test_rate_change_touches_only_selected_classes():
     assert "rate 12000kbit" in commands[1] and "dev eth-test" in commands[1]
     with pytest.raises(ValueError):
         rate_change(Profile.parse(DATA), 3, 1, 1)
+    with pytest.raises(ValueError, match="ceiling"):
+        rate_change(Profile.parse(DATA), 1, 45001, 15000)
 
 
 @pytest.mark.parametrize("path,value", [

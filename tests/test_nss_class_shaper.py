@@ -18,7 +18,7 @@ def test_class_update_names_one_class_and_both_rate_fields():
     result = run('tc() { printf "%s\\n" "$*"; }; md_nss_set_rate eth-test 101 12000')
     assert result.returncode == 0
     assert result.stdout.strip() == (
-        "class change dev eth-test parent 1: classid 1:101 nsshtb "
+        "class change dev eth-test parent 1:1 classid 1:101 nsshtb "
         "rate 12000kbit burst 7500 crate 12000kbit cburst 7500"
     )
 

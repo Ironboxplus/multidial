@@ -12,7 +12,7 @@ md_nss_set_rate() {
     ((rate <= 34359738)) || return 1
     burst=$(( (rate * 5 + 7) / 8 ))
     ((burst < 2048)) && burst=2048
-    tc class change dev "$dev" parent 1: classid "1:$leaf" nsshtb \
+    tc class change dev "$dev" parent 1:1 classid "1:$leaf" nsshtb \
         rate "${rate}kbit" burst "$burst" crate "${rate}kbit" cburst "$burst"
 }
 

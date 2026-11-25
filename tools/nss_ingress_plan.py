@@ -24,10 +24,13 @@ def ingress_plan(ifb, lines, default_kbit, change_slot=None):
             raise ValueError("line address must be assigned unicast IPv4")
         if not 0 <= slot <= 254 or slot in classes or addr in addresses:
             raise ValueError("slots must be unique (0..254), IPv4 addresses must be unique")
-        classes[slot] = (addr, rate_params(int(kbit)))
+        kbit = int(kbit)
+        rate_params(kbit)
+        classes[slot] = (addr, kbit)
         addresses.add(addr)
     if not classes:
         raise ValueError("at least one line required")
+    aggregate = rate_params(default_kbit + sum(rate for _, rate in classes.values()))
 
     # tc prints handles in hex. Keying by slot keeps the leaf stable across
     # DHCP renewals, reordering of inputs, and removal of a different line.
@@ -35,18 +38,19 @@ def ingress_plan(ifb, lines, default_kbit, change_slot=None):
         if change_slot not in classes:
             raise ValueError("unknown slot for rate change")
         minor = f"{0x100 + change_slot:x}"
-        return [f"class change dev {ifb} parent 1: classid 1:{minor} nsshtb {classes[change_slot][1]}"]
+        return [f"class change dev {ifb} parent 1:1 classid 1:{minor} nsshtb {rate_params(classes[change_slot][1])}"]
 
     leaf_opts = "nssfq_codel target 5ms interval 100ms flows 128 limit 256 accel_mode 0"
     commands = [
         f"qdisc add dev {ifb} root handle 1: nsshtb accel_mode 0",
-        f"class add dev {ifb} parent 1: classid 1:2 nsshtb {fallback}",
+        f"class add dev {ifb} parent 1: classid 1:1 nsshtb {aggregate}",
+        f"class add dev {ifb} parent 1:1 classid 1:2 nsshtb {fallback}",
         f"qdisc add dev {ifb} parent 1:2 handle 2: {leaf_opts} set_default",
     ]
     for slot, (addr, rate) in sorted(classes.items()):
         minor = f"{0x100 + slot:x}"
         commands.extend([
-            f"class add dev {ifb} parent 1: classid 1:{minor} nsshtb {rate}",
+            f"class add dev {ifb} parent 1:1 classid 1:{minor} nsshtb {rate_params(rate)}",
             f"qdisc add dev {ifb} parent 1:{minor} handle {minor}: {leaf_opts}",
             # nss_qdisc_iterate_fl uses TC_H_MAJ(res.classid) only.
             f"filter add dev {ifb} parent 1: protocol ip pref {100 + slot} "
