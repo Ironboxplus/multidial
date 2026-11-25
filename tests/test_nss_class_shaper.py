@@ -48,6 +48,8 @@ ul_avg_owd_delta_thr_us=20000
 md_nss_dl_device=ifb-test
 md_nss_ul_device=eth-test
 md_nss_leaf=100
+md_nss_dl_ceiling_kbit=30000
+md_nss_ul_ceiling_kbit=10000
 log_msg() { :; }
 tc() { return TC_RC; }
 set_shaper_rate dl

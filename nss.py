@@ -142,6 +142,8 @@ def autorate_fragment(profile, line):
         f"md_nss_dl_device='{profile.ifb}'",
         f"md_nss_ul_device='{profile.physical}'",
         f"md_nss_leaf='{line.leaf}'",
+        f"md_nss_dl_ceiling_kbit='{line.download_kbit}'",
+        f"md_nss_ul_ceiling_kbit='{line.upload_kbit}'",
         ". /usr/lib/multidial/multidial/tools/nss-class-shaper.sh",
         "",
     ])

@@ -5,11 +5,12 @@
 # measures counters and pings on its own logical uplink.
 
 md_nss_set_rate() {
-    local dev=$1 leaf=$2 rate=$3 burst
+    local dev=$1 leaf=$2 rate=$3 ceiling=${4:-34359738} burst
     [[ $dev =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.@-]{0,14}$ ]] || return 1
     [[ $leaf =~ ^1[0-9a-f]{2}$ && $leaf != 1ff ]] || return 1
     [[ $rate =~ ^[1-9][0-9]{0,7}$ ]] || return 1
-    ((rate <= 34359738)) || return 1
+    [[ $ceiling =~ ^[1-9][0-9]{0,7}$ ]] || return 1
+    ((ceiling <= 34359738 && rate <= ceiling)) || return 1
     burst=$(( (rate * 5 + 7) / 8 ))
     ((burst < 2048)) && burst=2048
     tc class change dev "$dev" parent 1:1 classid "1:$leaf" nsshtb \
@@ -17,17 +18,24 @@ md_nss_set_rate() {
 }
 
 set_shaper_rate() {
-    local direction=$1 device
+    local direction=$1 device ceiling
     [[ $direction == dl || $direction == ul ]] || return 1
     ((shaper_rate_kbps[$direction] != last_shaper_rate_kbps[$direction])) || return 0
 
     if ((adjust_shaper_rate[$direction])); then
         if [[ $direction == dl ]]; then
             device=$md_nss_dl_device
+            ceiling=${md_nss_dl_ceiling_kbit-}
         else
             device=$md_nss_ul_device
+            ceiling=${md_nss_ul_ceiling_kbit-}
         fi
-        md_nss_set_rate "$device" "$md_nss_leaf" "${shaper_rate_kbps[$direction]}" || {
+        # An old fragment must not silently become an uncapped controller.
+        [[ $ceiling =~ ^[1-9][0-9]{0,7}$ ]] || {
+            log_msg "ERROR" "Missing or invalid NSS class ceiling"
+            return 1
+        }
+        md_nss_set_rate "$device" "$md_nss_leaf" "${shaper_rate_kbps[$direction]}" "$ceiling" || {
             log_msg "ERROR" "NSS class rate update failed"
             return 1
         }
