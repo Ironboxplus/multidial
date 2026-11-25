@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(not BASH, reason="Bash required")
 
 
-def invoke(tmp_path, rate, ceiling="30000", tc_status=0):
+def invoke(tmp_path, rate, ceiling="30000", tc_status=0, lease_token=None):
     executable = tmp_path / "tc"
     executable.write_text(
         '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TC_RECORD"\nexit "$TC_STATUS"\n'
@@ -36,10 +36,18 @@ dl_avg_owd_delta_thr_us=20000; ul_avg_owd_delta_thr_us=20000
 md_nss_dl_device=ifb-test; md_nss_ul_device=eth-test; md_nss_leaf=100
 md_nss_dl_ceiling_kbit='{ceiling}'; md_nss_ul_ceiling_kbit=10000
 log_msg() {{ printf '%s\\n' "$*" >&2; }}
+LEASE_SETUP
 set_shaper_rate dl
 status=$?
 printf '%s %s' "$status" "${{last_shaper_rate_kbps[dl]}}"
 """
+    lease_setup = ""
+    if lease_token is not None:
+        marker = tmp_path / "line.lease"
+        marker.write_text(lease_token + "\n")
+        lease_setup = (f"md_nss_lease_file='{marker}'\n"
+                       "md_nss_lease_generation=current\n")
+    script = script.replace("LEASE_SETUP", lease_setup)
     result = subprocess.run([BASH, "-c", script], cwd=ROOT, env=env,
                             text=True, capture_output=True, timeout=5)
     return result, record.read_text() if record.exists() else ""
@@ -60,3 +68,11 @@ def test_ceiling_update_and_process_failure(tmp_path, tc_status):
     assert result.returncode == 0, result.stderr
     assert result.stdout == ("0 30000" if tc_status == 0 else "1 20000")
     assert "rate 30000kbit" in calls and "crate 30000kbit" in calls
+
+
+@pytest.mark.parametrize("lease_token,expected", [("current", "0 30000"), ("old", "1 20000")])
+def test_real_lease_file_blocks_a_stale_controller(tmp_path, lease_token, expected):
+    result, calls = invoke(tmp_path, 30000, lease_token=lease_token)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == expected
+    assert bool(calls) == (lease_token == "current")

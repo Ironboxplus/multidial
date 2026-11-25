@@ -72,9 +72,11 @@ def locked_state(path):
     with path.with_suffix(path.suffix + ".lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = json.loads(path.read_text()) if path.exists() else {
-            "version": 1, "revision": 0, "applied": None, "pending": None}
+            "version": 1, "epoch": os.urandom(16).hex(), "revision": 0,
+            "applied": None, "pending": None}
         if state.get("version") != 1:
             raise ValueError("unsupported state version")
+        state.setdefault("epoch", os.urandom(16).hex())
         yield state
         fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
         try:
@@ -107,7 +109,8 @@ def propose(state, desired):
     if not steps:
         return None
     state["revision"] += 1
-    pending = {"id": identity([state["revision"], desired]), "desired": desired,
+    state.setdefault("epoch", os.urandom(16).hex())
+    pending = {"id": identity([state["epoch"], state["revision"], desired]), "desired": desired,
                "steps": steps, "next": 0, "receipts": []}
     state["pending"] = pending
     return pending
@@ -152,7 +155,7 @@ def rollback(state):
                   {"operation": "verify_both_directions", "devices": online},
                   {"operation": "allow_learning", "devices": online}]
     state["revision"] += 1
-    state["pending"] = {"id": identity([state["revision"], "rollback", pending["id"]]),
+    state["pending"] = {"id": identity([state["epoch"], state["revision"], "rollback", pending["id"]]),
                         "desired": state["applied"], "steps": steps, "next": 0,
                         "receipts": [], "rollback_of": pending["id"]}
     return state["pending"]

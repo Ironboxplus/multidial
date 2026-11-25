@@ -6,7 +6,7 @@ qdiscs and claim a hardware result.
 """
 import json
 import os
-from pathlib import Path
+import selectors
 import subprocess
 import sys
 import uuid
@@ -121,8 +121,7 @@ def counter(lab, slot):
                 if "counter" in item)
 
 
-@pytest.mark.parametrize("slot", [0, 1])
-def test_forwarded_nat_reply_preserves_route_mark_and_physical_priority(lab, slot):
+def exchange(lab, slot, address=None):
     # An external UDP echo server reports the translated source address.
     server = '''import socket
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(("192.0.2.1",42001));s.settimeout(8)
@@ -134,7 +133,10 @@ for i in range(5):
                                 "-u", "-c", server], stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, text=True)
     lab.processes.append(process)
-    assert process.stdout.readline().strip() == "ready"
+    with selectors.DefaultSelector() as ready:
+        ready.register(process.stdout, selectors.EVENT_READ)
+        assert ready.select(timeout=5), "echo server readiness timed out"
+        assert process.stdout.readline().strip() == "ready"
     before = [counter(lab, n) for n in (0, 1)]
     client = f'''import socket
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -142,7 +144,7 @@ s.bind(("198.18.0.{slot+2}",0));s.settimeout(3)
 for i in range(5):
  payload=("packet-%s"%i).encode();s.sendto(payload,("192.0.2.1",42001))
  data,peer=s.recvfrom(2048)
- assert data==b"192.0.2.{slot+2}:"+payload,(data,peer)
+ assert data==b"{address or f'192.0.2.{slot+2}'}:"+payload,(data,peer)
 print("five round trips")
 '''
     assert lab.run("lan", sys.executable, "-c", client).stdout.strip() == "five round trips"
@@ -154,3 +156,19 @@ print("five round trips")
     assert any(q.get("kind") == "fq_codel" and q.get("packets", 0) >= 5 for q in stats)
     print(json.dumps({"slot": slot, "physical_packets": after[slot]-before[slot],
                       "nat_reply_packets": 5, "other_line_delta": after[1-slot]-before[1-slot]}))
+
+
+@pytest.mark.parametrize("slot", [0, 1])
+def test_forwarded_nat_reply_preserves_route_mark_and_physical_priority(lab, slot):
+    exchange(lab, slot)
+
+
+def test_address_renewal_reclassifies_new_flows_and_keeps_other_line(lab):
+    exchange(lab, 0)
+    lab.ip("dut", "addr", "del", "192.0.2.2/24", "dev", "dial0")
+    lab.ip("dut", "addr", "add", "192.0.2.4/24", "dev", "dial0")
+    lab.run("dut", "nft", "-f", "-", data='''
+add rule netdev inspect egress ip saddr 192.0.2.4 meta mark 0x100 meta priority 0x01000000 counter name line0
+''')
+    exchange(lab, 0, "192.0.2.4")
+    exchange(lab, 1)
